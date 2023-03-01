@@ -2,6 +2,7 @@ import json
 import time
 import os
 import random
+import boto3
 
 import logging
 
@@ -69,7 +70,26 @@ def dining(intent_request):
                         "Your request has been sent to our restaurant suggestion system. You will receive a text message shortly with your restaurant suggestion.",\
                         "Please wait while I send your request to our restaurant suggestion system. You will receive a text message shortly with your restaurant suggestion."]
 
-    # TODO: Send the request to SQS
+    # Send the message to SQS
+    message = {
+        'location': location,
+        'cuisine': cuisine,
+        'party': party,
+        'date': date,
+        'time': time,
+        'phone': phone
+    }
+    sqs_client = boto3.client('sqs')
+
+    try: 
+        response = sqs_client.send_message(
+            QueueUrl = 'https://sqs.us-east-1.amazonaws.com/502395508438/Q1',
+            MessageBody = json.dumps(message)
+        )
+        logger.info(response)
+    except Exception as e:
+        logger.error(e)
+        possible_answers = ["Sorry, Unable to send your request to our restaurant suggestion system right now. Please try again later."]
 
     return close(
         session_attributes,
