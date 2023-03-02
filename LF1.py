@@ -3,6 +3,7 @@ import time
 import os
 import random
 import boto3
+import requests
 
 import logging
 

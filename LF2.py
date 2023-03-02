@@ -116,7 +116,7 @@ def format_restaurant_string(restaurant):
 
 def get_rec_for_cuisine(cuisine):
     http = urllib3.PoolManager()
-    headers = urllib3.make_headers(basic_auth='master2:Search!@#123')
+    headers = urllib3.make_headers(basic_auth='es_username:es_password')
     r = http.request('GET', f'https://search-cc-hw1-search-mge6fhse3jskjt4n3uwuvqwlmy.us-east-1.es.amazonaws.com/restaurants/_search?q={cuisine}&pretty=true', headers=headers)
     data = json.loads(r.data)
     
