@@ -1,5 +1,8 @@
 # Chatbot Concierge #
 
+## Authors: Alex Yan, Leo Li
+## Frontend Link: <http://cc-hw1.s3-website-us-east-1.amazonaws.com/>
+
 ## About ##
 
 Frontend starter repository for HW 1 of the Cloud Computing & Big Data
