@@ -1,15 +1,19 @@
 import json
 import boto3
 import random
+import datetime
 import logging
+import urllib3
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 
 def lambda_handler(event, context):
+    
     queue = boto3.client('sqs')
 
+    # Poll from queue
     try:
         messages = queue.receive_message(
             QueueUrl='https://sqs.us-east-1.amazonaws.com/502395508438/Q1',
@@ -22,7 +26,8 @@ def lambda_handler(event, context):
         logger.info(f"Received message: {message}")
         message_body = json.loads(message["Body"])
     except Exception as e:
-        logger.error("Couldn't receive messages from queue: %s", queue)
+        logger.error("Couldn't receive messages from queue")
+        return "Couldn't receive messages from queue"
     else:
         handle_rec_request(message_body)
 
@@ -31,24 +36,25 @@ def lambda_handler(event, context):
         queue.delete_message(
         QueueUrl='https://sqs.us-east-1.amazonaws.com/502395508438/Q1', ReceiptHandle=receipt_handle)
     except Exception as e:
-        logger.error("Couldn't delete message from queue: %s", queue)
+        logger.error("Couldn't delete message from queue")
+        return "Couldn't delete message from queue"
         
     return "Message successfully sent to target email and deleted from queue"
 
 
 def handle_rec_request(data):
     location = data['location']
-    cuisine = data['cuisine']
+    cuisine = data['cuisine'].lower()
     party = data['party']
     date = data['date']
     time = data['time']
     email = data['email']
 
-    # restaurants = get_rec_for_cuisine(cuisine) # should be exactly 3 in a list
-    # format restaurant data into a string
-    # rec_ses = format_rec_string(restaurants, cuisine)
-
-    ses_send(str(data), email)
+    rec_ids = get_rec_for_cuisine(cuisine)
+    restaurants = dynamo_fetch(cuisine, rec_ids)
+    formatted = format_rec_string(restaurants, cuisine, party, date)
+    
+    ses_send(formatted, email)
 
 
 def ses_send(msg, email):
@@ -71,7 +77,7 @@ def ses_send(msg, email):
                     },
                 },
                 'Subject': {
-                    'Data': "Test AWS SES",
+                    'Data': "Your Dining Suggest",
                 },
             },
             Source="yanalex@foxmail.com",
@@ -86,7 +92,9 @@ def ses_send(msg, email):
 def format_rec_string(restaurants, cuisine, party, date):
     cuisine = cuisine.capitalize()
     party_string = str(party) + " " + ("person" if party == 1 else "people")
-    date_string = str(date)  # TODO: might need formatting
+    date_string = str(date)
+    if date == datetime.date.today():
+        date_string = "today"
     rest1_string = format_restaurant_string(restaurants[0])
     rest2_string = format_restaurant_string(restaurants[1])
     rest3_string = format_restaurant_string(restaurants[2])
@@ -100,16 +108,43 @@ def format_rec_string(restaurants, cuisine, party, date):
 
 
 def format_restaurant_string(restaurant):
-    name = restaurant['name']
-    addr = restaurant['location']['address1']
-    if restaurant['location']['address2']:
-        addr += " " + restaurant['location']['address2']
-    if restaurant['location']['address3']:
-        addr += " " + restaurant['location']['address3']
+    name = restaurant[0]
+    addr = restaurant[1]
 
     return f"{name}, located at {addr}"
 
 
 def get_rec_for_cuisine(cuisine):
-    # pull from dynamoDB using elasticsearch
-    pass
+    http = urllib3.PoolManager()
+    headers = urllib3.make_headers(basic_auth='master2:Search!@#123')
+    r = http.request('GET', f'https://search-cc-hw1-search-mge6fhse3jskjt4n3uwuvqwlmy.us-east-1.es.amazonaws.com/restaurants/_search?q={cuisine}&pretty=true', headers=headers)
+    data = json.loads(r.data)
+    
+    return [d['_source']["id"] for d in data['hits']['hits'][:3]]
+
+def dynamo_fetch(cuisine, ids):
+    dynamodb = boto3.resource('dynamodb')
+    table = dynamodb.Table('yelp-restaurants')
+    results = []
+
+    for id in ids:
+        try:
+            response = table.get_item(
+                Key={
+                    'cuisine_category': cuisine,
+                    'id': id
+                }
+            )
+        except Exception as e:
+            logger.error(e)
+        else:
+            if 'Item' in response:
+                logger.info(f"Got item: {response['Item']}")
+                item = response['Item']
+                name = item.get('name')
+                location = item.get('location').get('display_address')[0]
+                results.append((name, location))
+            else:
+                logger.info("However, queried item not found")
+
+    return results
