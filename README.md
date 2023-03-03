@@ -1,6 +1,6 @@
 # Chatbot Concierge #
 
-## Authors: Alex Yan, Leo Li
+## Authors: Alex Yan (yy3397), Leo Li (zl3493)
 ## Frontend Link: <http://cc-hw1.s3-website-us-east-1.amazonaws.com/>
 
 ## About ##
