@@ -3,12 +3,14 @@ import time
 import os
 import random
 import boto3
-import requests
+from datetime import datetime
 
 import logging
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
+
+''' --- Format Responses --- '''
 
 def close(session_attributes, fulfillment_state, message):
     response = {
@@ -21,6 +23,56 @@ def close(session_attributes, fulfillment_state, message):
     }
 
     return response
+
+def elicit_slot(session_attributes, intent_name, slots, slot_to_elicit, message):
+    return {
+        'sessionAttributes': session_attributes,
+        'dialogAction': {
+            'type': 'ElicitSlot',
+            'intentName': intent_name,
+            'slots': slots,
+            'slotToElicit': slot_to_elicit,
+            'message': message
+        }
+    }
+    
+def delegate(session_attributes, slots):
+    return {
+        'sessionAttributes': session_attributes,
+        'dialogAction': {
+            'type': 'Delegate',
+            'slots': slots
+        }
+    }
+    
+def build_validation_result(is_valid, violated_slot, message_content):
+    if message_content is None:
+        return {
+            "isValid": is_valid,
+            "violatedSlot": violated_slot,
+        }
+
+    return {
+        'isValid': is_valid,
+        'violatedSlot': violated_slot,
+        'message': {'contentType': 'PlainText', 'content': message_content}
+    }
+    
+def validate(location, cuisine, party, date):
+    valid_loc = ["manhattan", "new york", "newyork"]
+    valid_cuisine = ["japanese", "chinese", "italian", "french", "thai", "vietnamese", "american", "healthy"]
+    if location is not None and location.lower() not in valid_loc:
+        return build_validation_result(False, 'Location', f"Our service does not support {location} as location, please try another.")
+    if cuisine is not None and cuisine.lower() not in valid_cuisine:
+        return build_validation_result(False, 'Cuisine', f"Our service does not support {cuisine} as cuisine type, please try another.")
+    if party is not None and int(party) < 1:
+        return build_validation_result(False, 'Party', f"Our service does not support {party} as number of people, please try another.")
+    if date is not None:
+        input_date = datetime.strptime(date, "%Y-%m-%d").date()
+        if input_date < datetime.today().date():
+            return build_validation_result(False, 'Date', f"Our service does not support {date} as dining date, please try another.")
+            
+    return build_validation_result(True, None, None)
     
     
 """ --- Intent Handlers ---"""
@@ -61,15 +113,34 @@ def dining(intent_request):
     Sends a restaurant suggestion to SQS based on the date, time, party number, cuisine type and location provided by the user
     """
     session_attributes = intent_request['sessionAttributes'] if intent_request['sessionAttributes'] is not None else {}
+    
     location = intent_request['currentIntent']['slots']['Location']
     cuisine = intent_request['currentIntent']['slots']['Cuisine']
     party = intent_request['currentIntent']['slots']['Party']
     date = intent_request['currentIntent']['slots']['Date']
     time = intent_request['currentIntent']['slots']['Time']
-    phone = intent_request['currentIntent']['slots']['PhoneNum']
-    possible_answers = ["I have sent your request to our restaurant suggestion system. You will receive a text message shortly with your restaurant suggestion.",\
-                        "Your request has been sent to our restaurant suggestion system. You will receive a text message shortly with your restaurant suggestion.",\
-                        "Please wait while I send your request to our restaurant suggestion system. You will receive a text message shortly with your restaurant suggestion."]
+    email = intent_request['currentIntent']['slots']['Email']
+    
+    # validate
+    source = intent_request['invocationSource']
+    if source == 'DialogCodeHook':
+        slots = intent_request['currentIntent']['slots']
+        validation_result = validate(location, cuisine, party, date)
+        
+        # didn't pass validation
+        if not validation_result['isValid']:
+            slots[validation_result['violatedSlot']] = None
+            return elicit_slot(intent_request['sessionAttributes'],
+                               intent_request['currentIntent']['name'],
+                               slots,
+                               validation_result['violatedSlot'],
+                               validation_result['message'])
+        
+        # passed validation
+        return delegate(session_attributes, slots)
+        
+    
+    possible_answers = ["You’re all set. Expect my suggestions shortly! Have a good day."]
 
     # Send the message to SQS
     message = {
@@ -78,7 +149,7 @@ def dining(intent_request):
         'party': party,
         'date': date,
         'time': time,
-        'phone': phone
+        'email': email
     }
     sqs_client = boto3.client('sqs')
 
@@ -122,7 +193,6 @@ def dispatch(intent_request):
         return dining(intent_request)
 
     raise Exception('Intent with name ' + intent_name + ' not supported')
-
 
 """ -- Entry Point --- """
 def lambda_handler(event, context):

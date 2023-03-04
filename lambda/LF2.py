@@ -52,7 +52,7 @@ def handle_rec_request(data):
 
     rec_ids = get_rec_for_cuisine(cuisine)
     restaurants = dynamo_fetch(cuisine, rec_ids)
-    formatted = format_rec_string(restaurants, cuisine, party, date)
+    formatted = format_rec_string(restaurants, cuisine, party, date, time)
     
     ses_send(formatted, email)
 
@@ -89,10 +89,17 @@ def ses_send(msg, email):
         logger.info(f"Email sent! Message ID: {response['MessageId']}")
 
 
-def format_rec_string(restaurants, cuisine, party, date):
+def format_rec_string(restaurants, cuisine, party, date, time):
     cuisine = cuisine.capitalize()
     party_string = str(party) + " " + ("person" if party == 1 else "people")
     date_string = str(date)
+    time_string = str(time)
+    if time_string == "MO":
+        time_string = "morning"
+    elif time_string == "AF":
+        time_string = "afternoon"
+    elif time_string == "EV":
+        time_string = "evening"
     if date == datetime.date.today():
         date_string = "today"
     rest1_string = format_restaurant_string(restaurants[0])
@@ -100,10 +107,11 @@ def format_rec_string(restaurants, cuisine, party, date):
     rest3_string = format_restaurant_string(restaurants[2])
 
     msg = f"Hello! Here are my {cuisine} restaurant suggestions for {party_string}, " +\
-        f"for {date_string}: " +\
+        f"for {date_string} " +\
+        f"at {time_string}: " +\
         f"1. {rest1_string}, " +\
         f"2. {rest2_string}, "\
-        f"3. {rest3_string}. Enjoy yourmeal!"
+        f"3. {rest3_string}. Enjoy your meal!"
     return msg
 
 
@@ -116,7 +124,7 @@ def format_restaurant_string(restaurant):
 
 def get_rec_for_cuisine(cuisine):
     http = urllib3.PoolManager()
-    headers = urllib3.make_headers(basic_auth='es_username:es_password')
+    headers = urllib3.make_headers(basic_auth='master2:Search!@#123')
     r = http.request('GET', f'https://search-cc-hw1-search-mge6fhse3jskjt4n3uwuvqwlmy.us-east-1.es.amazonaws.com/restaurants/_search?q={cuisine}&pretty=true', headers=headers)
     data = json.loads(r.data)
     
