@@ -144,6 +144,7 @@ def dining(intent_request):
 
     # Send the message to SQS
     message = {
+        'uuid': intent_request['userId'],
         'location': location,
         'cuisine': cuisine,
         'party': party,
@@ -207,5 +208,3 @@ def lambda_handler(event, context):
     logger.debug('event.bot.name={}'.format(event['bot']['name']))
 
     return dispatch(event)
-    
-    

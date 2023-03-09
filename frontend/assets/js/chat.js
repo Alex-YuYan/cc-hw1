@@ -27,11 +27,17 @@ $(document).ready(function() {
 
   function callChatbotApi(message) {
     // params, body, additionalParams
+    if (localStorage.getItem("hw1") == null) {
+      var tosend = ""
+    } else {
+      var tosend = localStorage.getItem("hw1")
+    }
     return sdk.chatbotPost({}, {
       messages: [{
         type: 'unstructured',
         unstructured: {
-          text: message
+          text: message,
+          uuid: tosend
         }
       }]
     }, {});
@@ -60,6 +66,9 @@ $(document).ready(function() {
           for (var message of messages) {
             if (message.type === 'unstructured') {
               insertResponseMessage(message.unstructured.text);
+              if (localStorage.getItem("hw1") == null) {
+                localStorage.setItem("hw1", message.unstructured.uuid);
+              }
             } else if (message.type === 'structured' && message.structured.type === 'product') {
               var html = '';
 

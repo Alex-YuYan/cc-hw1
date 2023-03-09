@@ -49,13 +49,29 @@ def handle_rec_request(data):
     date = data['date']
     time = data['time']
     email = data['email']
+    uuid = data['uuid']
 
     rec_ids = get_rec_for_cuisine(cuisine)
     restaurants = dynamo_fetch(cuisine, rec_ids)
     formatted = format_rec_string(restaurants, cuisine, party, date, time)
+    write_uuid_to_db(uuid, formatted)
     
     ses_send(formatted, email)
 
+
+def write_uuid_to_db(uuid, rec_string):
+    dynamodb = boto3.resource('dynamodb')
+    table = dynamodb.Table('past_recs')
+    try:
+        response = table.put_item(
+            Item={
+                'id': uuid,
+                'rec_string': rec_string
+            }
+        )
+    except Exception as e:
+        logger.error(e)
+        logger.info("Unable to fetch old rec from DynamoDB")
 
 def ses_send(msg, email):
     client = boto3.client('ses')
